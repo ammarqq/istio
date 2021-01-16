@@ -1,0 +1,153 @@
+
+
+########################
+# Installing Istio CLI #
+########################
+
+# Go to https://github.com/istio/istio/releases
+# Pick a release
+# Download and unpack the release, and move it to a directory set in the `PATH`
+
+# NOTE: If you already have `istioctl` from before, make sure to upgrade it to v1.5+ if it's older than that
+
+
+$ wget https://github.com/istio/istio/releases/download/1.8.2/istio-1.8.2-linux-arm64.tar.gz
+
+$ tar xvf istio-1.8.2-linux-arm64.tar.gz
+$ cd istio-1.8.2/bin
+$ cp istioctl /usr/local/bin
+$ istioctl version
+
+
+###############################
+# Creating Kubernetes Cluster #
+###############################
+
+
+az login
+
+az provider register -n Microsoft.Network
+
+az provider register -n Microsoft.Storage
+
+az provider register -n Microsoft.Compute
+
+az provider register -n Microsoft.ContainerService
+
+az group create \
+    --name istio \
+    --location eastus
+
+az aks create \
+    --resource-group istio \
+    --name istio \
+    --node-count 3 \
+    --node-vm-size Standard_D2s_v3 \
+    --generate-ssh-keys \
+    --enable-cluster-autoscaler \
+    --min-count 1 \
+    --max-count 6
+
+az aks get-credentials \
+    --resource-group istio \
+    --name istio
+
+
+
+####################
+# Installing Istio #
+####################
+
+# NOTE: Make sure that you install `istioctl` v1.5+.
+# NOTE: If you already have `istioctl`, make sure that it is updated if it's older than v1.5.
+
+istioctl profile list
+
+istioctl profile dump demo
+
+istioctl manifest install \
+    --set profile=demo
+
+kubectl get crds | grep 'istio.io'
+
+kubectl --namespace istio-system \
+    get services
+
+# Confirm that `EXTERNAL-IP` of `istio-ingressgateway` is not `pending`, unless using minikube
+
+kubectl --namespace istio-system \
+    get pods
+
+############################
+# Manual Sidecar Injection #
+############################
+
+git clone \
+    https://github.com/vfarcic/k8s-specs.git
+
+cd k8s-specs
+
+git pull 
+
+cat istio/alpine.yml
+
+istioctl kube-inject \
+    --filename istio/alpine.yml
+
+istioctl kube-inject \
+    --filename istio/alpine.yml \
+    | kubectl apply --filename -
+
+kubectl get pods
+
+kubectl describe pod \
+    --selector app=alpine
+
+kubectl delete \
+    --filename istio/alpine.yml
+
+###############################
+# Automatic Sidecar Injection #
+###############################
+
+kubectl apply \
+    --filename istio/alpine.yml
+
+kubectl get pods
+
+kubectl label namespace default \
+    istio-injection=enabled
+
+kubectl describe namespace default
+
+kubectl rollout restart \
+    deployment alpine
+
+kubectl get pods
+
+kubectl describe pod \
+    --selector app=alpine
+
+kubectl label namespace default \
+    istio-injection-
+
+kubectl rollout restart \
+    deployment alpine
+
+kubectl get pods
+
+kubectl delete \
+    --filename istio/alpine.yml
+
+###############
+# Cleaning Up #
+###############
+
+istioctl manifest generate \
+    --set profile=demo
+
+istioctl manifest generate \
+    --set profile=demo \
+    | kubectl delete -f -
+
+cd ..
